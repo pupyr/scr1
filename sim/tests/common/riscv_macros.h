@@ -102,8 +102,10 @@
 #define INTERRUPT_HANDLER j other_exception /* No interrupts should occur */
 
 #define RVTEST_CODE_BEGIN                                               \
+        .org 0x600,0;                                                   \
+        MSG_TRAP:                                                       \
+        .string "illegal";                                              \
         .section .text.init;                                            \
-        .org 0xC0, 0x00;                                                \
         .balign  64;                                                    \
         .weak stvec_handler;                                            \
         .weak mtvec_handler;                                            \
@@ -117,6 +119,17 @@ trap_vector:                                                            \
         li a5, CAUSE_MACHINE_ECALL;                                     \
         beq a4, a5, _report;                                            \
         /* if an mtvec_handler is defined, jump to it */                \
+        lui a6, 0xf0000;                                                \
+        la a7, MSG_TRAP;                                                \
+next_iter:                                                              \
+        lb a5, 0(a7);                                                   \
+        beq a5, x0, break_from_loop;                                    \
+        sw a5, 0(a6);                                                   \
+        addi a7,a7,1;                                                   \
+        jal x0, next_iter;                                              \
+break_from_loop:                                                        \
+        li a5, 0xa;                                                     \
+        sw a5, 0(a6);                                                   \
         la a4, mtvec_handler;                                           \
         beqz a4, 1f;                                                    \
         jr a4;                                                          \
@@ -133,6 +146,7 @@ _report:                                                                \
         j sc_exit;                                                      \
         .balign  64;                                                    \
         .globl _start;                                                  \
+        .section .text.start;                                           \
 _start:                                                                 \
         RISCV_MULTICORE_DISABLE;                                        \
         /*INIT_SPTBR;*/                                                 \
