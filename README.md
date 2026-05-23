@@ -1,5 +1,10 @@
 # SCR1 RISC-V Core
 
+
+fast run
+```
+make run_verilator_wf TARGETS="riscv_isa" TRACE=1
+```
 SCR1 is an open-source and free to use RISC-V compatible MCU-class core, designed and maintained by Syntacore. It is industry-grade and silicon-proven (including full-wafer production), works out of the box in all major EDA flows and Verilator, and comes with extensive collateral and documentation.
 
 ![SCR1 cluster](./docs/img/scr1_cluster.svg)
