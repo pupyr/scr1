@@ -28,6 +28,14 @@ module scr1_pipe_top (
     input   logic                                       dbg_rst_n,                  // Debug reset
 `endif // SCR1_DBG_EN
     input   logic                                       clk,                        // Pipe clock
+    
+    input   logic					init_pc,
+    input   logic					force_i,
+    input   logic [`SCR1_IMEM_AWIDTH-1:0]		force_pc_i,
+    output  logic					force_o,
+    output  logic [`SCR1_IMEM_AWIDTH-1:0]		force_pc_o,
+    input   logic					force_end_i,
+    output  logic					force_end_o,
 
     // Instruction Memory Interface
     output  logic                                       pipe2imem_req_o,            // IMEM request
@@ -365,6 +373,14 @@ scr1_pipe_idu i_pipe_idu (
 scr1_pipe_exu i_pipe_exu (
     .rst_n                          (pipe_rst_n              ),
     .clk                            (clk                     ),
+    
+    .init_pc			    (init_pc		     ),
+    .force_i			    (force_i		     ),
+    .force_pc_i			    (force_pc_i		     ),
+    .force_o			    (force_o  	     	     ),
+    .force_pc_o			    (force_pc_o	  	     ),
+    .force_end_i		    (force_end_i	     ),
+    .force_end_o		    (force_end_o	     ),
 `ifdef SCR1_CLKCTRL_EN
     .clk_alw_on                     (clkctl2pipe_clk_alw_on_i),
     .clk_pipe_en                    (clkctl2pipe_clk_en_i),

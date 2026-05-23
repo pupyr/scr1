@@ -94,6 +94,8 @@ assign shamt        = instr[24:20];                                             
 // RV32I(MC) decode
 always_comb begin
     // Defaults
+    idu2exu_cmd_o.ptu_op      = '0;
+    idu2exu_cmd_o.ptu	      = 0;
     idu2exu_cmd_o.instr_rvc   = 1'b0;
     idu2exu_cmd_o.ialu_op     = SCR1_IALU_OP_REG_REG;
     idu2exu_cmd_o.ialu_cmd    = SCR1_IALU_CMD_NONE;
@@ -221,7 +223,18 @@ always_comb begin
                         if (instr[19] | instr[24])  rve_illegal = 1'b1;
 `endif  // SCR1_RVE_EXT
                     end // SCR1_OPCODE_STORE
-
+		    SCR1_OPCODE_HW_PARAL : begin
+		    	idu2exu_cmd_o.ptu = 1;	
+		    	case (funct3)
+		    		3'b000  : begin
+		    			idu2exu_cmd_o.rs1_addr    = instr[19:15];
+				    	idu2exu_cmd_o.ptu_op	  = SCR1_PTU_STRT;
+				    	idu2exu_use_rs1_o	  = 1'b1;	
+	    			end
+                        	3'b001  : idu2exu_cmd_o.ptu_op = SCR1_PTU_WAIT;
+                            	3'b010  : idu2exu_cmd_o.ptu_op = SCR1_PTU_END;
+                        endcase
+		    end
                     SCR1_OPCODE_OP              : begin
                         idu2exu_use_rs1_o         = 1'b1;
                         idu2exu_use_rs2_o         = 1'b1;

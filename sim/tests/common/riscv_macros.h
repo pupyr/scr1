@@ -10,6 +10,18 @@
 // Begin Macro
 //-----------------------------------------------------------------------
 
+.macro pts
+	.word (0x05 << 15) | 0x0000007F
+.endm
+
+.macro ptw
+	.word 0x0000107F
+.endm
+
+.macro pte
+	.word 0x0000207F
+.endm
+
 #define RVTEST_RV64U                                                    \
   .macro init;                                                          \
   .endm
@@ -816,4 +828,3 @@ pass: \
 #define TEST_DATA
 
 #endif
-

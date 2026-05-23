@@ -25,6 +25,14 @@ module scr1_core_top (
     input   logic                                   test_mode,                  // DFT Test Mode
     input   logic                                   test_rst_n,                 // DFT Test Reset
     input   logic                                   clk,                        // Core clock
+    input   logic				    init_pc,
+    input   logic				    force_i,
+    input   logic [`SCR1_IMEM_AWIDTH-1:0]	    force_pc_i,
+    output  logic				    force_o,
+    output  logic [`SCR1_IMEM_AWIDTH-1:0]	    force_pc_o,
+    input   logic				    force_end_i,
+    output  logic				    force_end_o,
+    
     output  logic                                   core_rst_n_o,               // Core reset
     output  logic                                   core_rdc_qlfy_o,            // Core RDC qualifier
 `ifdef SCR1_DBG_EN
@@ -282,6 +290,14 @@ scr1_pipe_top i_pipe_top (
 `endif // SCR1_DBG_EN
 `ifndef SCR1_CLKCTRL_EN
     .clk                            (clk                    ),
+    
+    .init_pc			    (init_pc		    ),
+    .force_i			    (force_i		    ),
+    .force_pc_i			    (force_pc_i		    ),
+    .force_o			    (force_o  	    	    ),
+    .force_pc_o			    (force_pc_o	  	    ),
+    .force_end_i		    (force_end_i	    ),
+    .force_end_o		    (force_end_o	    ),
 `else // SCR1_CLKCTRL_EN
     .clk                            (clk_pipe               ),
     .pipe2clkctl_sleep_req_o        (sleep_pipe             ),

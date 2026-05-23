@@ -55,6 +55,15 @@ module scr1_pipe_exu (
     // Common
     input   logic                               rst_n,                      // EXU reset
     input   logic                               clk,                        // Gated EXU clock
+    
+    input   logic				init_pc,
+    input   logic				force_i,
+    input   logic [`SCR1_IMEM_AWIDTH-1:0]       force_pc_i,
+    output  logic				force_o,
+    output  logic [`SCR1_IMEM_AWIDTH-1:0]	force_pc_o,
+    input   logic				force_end_i,
+    output  logic				force_end_o,
+    
 `ifdef SCR1_CLKCTRL_EN
     input   logic                               clk_alw_on,                 // Not-gated EXU clock
     input   logic                               clk_pipe_en,                // EXU clock enabled flag
@@ -202,6 +211,12 @@ logic                               exu_queue_vd_ff;
 logic                               exu_queue_vd_next;
 `endif // SCR1_NO_EXE_STAGE
 
+logic				    ptu_wait;
+logic				    ptu_end_ff;
+logic				    ptu_end_late_ff;
+logic				    ptu_active_ff;
+logic				    ptu_active2_ff;
+
 // IALU signals
 //------------------------------------------------------------------------------
 `ifdef SCR1_RVM_EXT
@@ -245,8 +260,6 @@ logic                               wfi_halted_next;
 
 // PC signals
 //------------------------------------------------------------------------------
-logic [3:0]                         init_pc_v;
-logic                               init_pc;
 logic [`SCR1_XLEN-1:0]              inc_pc;
 
 logic                               branch_taken;
@@ -353,6 +366,8 @@ always_ff @(posedge clk) begin
         exu_queue.wfi_req        <= idu2exu_cmd_i.wfi_req;
         exu_queue.exc_req        <= idu2exu_cmd_i.exc_req;
         exu_queue.exc_code       <= idu2exu_cmd_i.exc_code;
+        exu_queue.ptu            <= idu2exu_cmd_i.ptu;
+        exu_queue.ptu_op         <= idu2exu_cmd_i.ptu_op;
         idu2exu_use_rs1_ff       <= idu2exu_use_rs1_i;
         idu2exu_use_rs2_ff       <= idu2exu_use_rs2_i;
         if (idu2exu_use_rs1_i) begin
@@ -491,6 +506,47 @@ assign exu_exc_req  = exu_queue_vd & (exu_queue.exc_req | lsu_exc_req
   `endif // SCR1_DBG_EN
 `endif // SCR1_TDU_EN
                                                         );
+
+// PTU
+//------------------------------------------------------------------------------
+
+assign force_o = exu_queue_vd & exu_queue.ptu & exu_queue.ptu_op == 2'b00;
+assign force_pc_o = mprf2exu_rs1_data_i;
+
+always @(posedge clk, negedge rst_n) begin
+    	if (~rst_n) begin
+        	ptu_active_ff <= 0;
+    	end else if(force_o) begin
+		ptu_active_ff <= 1;
+	end else if (force_end_i) begin
+		ptu_active_ff <= 0;
+	end
+end
+
+always @(posedge clk) ptu_active2_ff <= ptu_active_ff;
+
+always @(posedge clk) 
+	if(exu_queue_vd & exu_queue.ptu & exu_queue.ptu_op == 2'b01 & ptu_active_ff)
+		ptu_wait <= 1;
+	else if(force_end_i)
+		ptu_wait <= 0;
+		
+always_ff @(posedge clk) begin
+	ptu_end_ff <= force_end_i;
+end
+
+always @(posedge clk, negedge rst_n) begin
+    	if (~rst_n) begin
+    		ptu_end_late_ff <= 0;
+    	end else if(force_end_o) begin
+		ptu_end_late_ff <= 1;
+	end else if(force_i) begin
+		ptu_end_late_ff <= 0;
+	end
+end
+		
+assign force_end_o = exu_queue_vd & exu_queue.ptu & exu_queue.ptu_op == 2'b10;
+
 
 // EXU exception request register
 //------------------------------------------------------------------------------
@@ -643,7 +699,7 @@ assign wfi_halted_next = wfi_halt_req | ~wfi_run_req;
 // WFI status signals
 //------------------------------------------------------------------------------
 
-assign exu2pipe_wfi_run2halt_o = wfi_halt_req;
+assign exu2pipe_wfi_run2halt_o = wfi_halt_req | ptu_wait | force_end_o;
 `ifdef SCR1_CLKCTRL_EN
 assign exu2pipe_wfi_halted_o   = wfi_halted_ff;
 `endif // SCR1_CLKCTRL_EN
@@ -661,22 +717,10 @@ assign exu2pipe_wfi_halted_o   = wfi_halted_ff;
 //------------------------------------------------------------------------------
 // Generates a New PC request to set PC to reset value
 
-always_ff @(posedge clk, negedge rst_n) begin
-    if (~rst_n) begin
-        init_pc_v <= '0;
-    end else begin
-        if (~&init_pc_v) begin
-            init_pc_v <= {init_pc_v[2:0], 1'b1};
-        end
-    end
-end
-
-assign init_pc = ~init_pc_v[3] & init_pc_v[2];
-
 // Current PC register
 //------------------------------------------------------------------------------
 
-assign pc_curr_upd = ((exu2pipe_instret_o | exu2csr_take_irq_o
+assign pc_curr_upd = force_i | ((exu2pipe_instret_o | exu2csr_take_irq_o
 `ifdef SCR1_DBG_EN
                    | dbg_run_start_npbuf) & ( ~hdu2exu_pc_advmt_dsbl_i
                                             & ~hdu2exu_no_commit_i
@@ -707,24 +751,28 @@ assign pc_curr_next = exu2ifu_pc_new_req_o        ? exu2ifu_pc_new_o
 always_comb begin
     case (1'b1)
         init_pc             : exu2ifu_pc_new_o = SCR1_RST_VECTOR;
+        force_i		    : exu2ifu_pc_new_o = force_pc_i;
         exu2csr_take_exc_o,
         exu2csr_take_irq_o,
         exu2csr_mret_instr_o: exu2ifu_pc_new_o = csr2exu_new_pc_i;
 `ifdef SCR1_DBG_EN
         dbg_run_start_npbuf : exu2ifu_pc_new_o = hdu2exu_dbg_new_pc_i;
 `endif // SCR1_DBG_EN
+	ptu_end_ff & ptu_active2_ff,
         wfi_run_start_ff    : exu2ifu_pc_new_o = pc_curr_ff;
         exu_queue.fencei_req: exu2ifu_pc_new_o = inc_pc;
         default             : exu2ifu_pc_new_o = ialu_addr_res & SCR1_JUMP_MASK;
     endcase
 end
 
-assign exu2ifu_pc_new_req_o = init_pc                                        // reset
+assign exu2ifu_pc_new_req_o = ~ptu_end_late_ff &
+			    ( init_pc                                        // reset
+			    | force_i  | ptu_end_ff & ptu_active2_ff
                             | exu2csr_take_irq_o
                             | exu2csr_take_exc_o
                             | (exu2csr_mret_instr_o & ~csr2exu_mstatus_mie_up_i)
                             | (exu_queue_vd & exu_queue.fencei_req)
-                            | (wfi_run_start_ff
+                            | (wfi_run_start_ff 
 `ifdef SCR1_CLKCTRL_EN
                             & clk_pipe_en
 `endif // SCR1_CLKCTRL_EN
@@ -732,7 +780,8 @@ assign exu2ifu_pc_new_req_o = init_pc                                        // 
 `ifdef SCR1_DBG_EN
                             | dbg_run_start_npbuf
 `endif // SCR1_DBG_EN
-                            | (exu_queue_vd & jb_taken);
+                            | (exu_queue_vd & jb_taken));
+
 
 // Jump/branch signals
 assign branch_taken = exu_queue.branch_req & ialu_cmp;
@@ -1067,19 +1116,6 @@ SCR1_SVA_EXU_ONEHOT_EXC : assert property (
 `endif
     })
     ) else $error("EXU Error: exceptions $onehot0 failed");
-
-// No event can request current PC update before initial reset sequence is done
-SCR1_SVA_EXU_CURR_PC_UPD_BEFORE_INIT : assert property (
-    @(negedge clk) disable iff (~rst_n)
-    ~&init_pc_v |-> ~( pc_curr_upd & ~init_pc )
-    ) else $error("EXU Error: current PC updated before been initialized");
-
-// No event can generate a new PC request to IFU before initial reset sequence
-// is done
-SCR1_SVA_EXU_NEW_PC_REQ_BEFORE_INIT : assert property (
-    @(negedge clk) disable iff (~rst_n)
-    ~&init_pc_v |-> ~( exu2ifu_pc_new_req_o & ~init_pc )
-    ) else $error("EXU Error: new PC req generated before reset sequence is done");
 
 `endif // SCR1_TRGT_SIMULATION
 

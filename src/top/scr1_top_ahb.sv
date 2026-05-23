@@ -115,6 +115,42 @@ logic [`SCR1_DMEM_DWIDTH-1:0]                       core_dmem_wdata;
 logic [`SCR1_DMEM_DWIDTH-1:0]                       core_dmem_rdata;
 type_scr1_mem_resp_e                                core_dmem_resp;
 
+// Instruction memory interface from core to router
+logic                                               core_imem_req_ack1;
+logic                                               core_imem_req1;
+type_scr1_mem_cmd_e                                 core_imem_cmd1;
+logic [`SCR1_IMEM_AWIDTH-1:0]                       core_imem_addr1;
+logic [`SCR1_IMEM_DWIDTH-1:0]                       core_imem_rdata1;
+type_scr1_mem_resp_e                                core_imem_resp1;
+
+// Data memory interface from core to router
+logic                                               core_dmem_req_ack1;
+logic                                               core_dmem_req1;
+type_scr1_mem_cmd_e                                 core_dmem_cmd1;
+type_scr1_mem_width_e                               core_dmem_width1;
+logic [`SCR1_DMEM_AWIDTH-1:0]                       core_dmem_addr1;
+logic [`SCR1_DMEM_DWIDTH-1:0]                       core_dmem_wdata1;
+logic [`SCR1_DMEM_DWIDTH-1:0]                       core_dmem_rdata1;
+type_scr1_mem_resp_e                                core_dmem_resp1;
+
+// Instruction memory interface from core to router
+logic                                               core_imem_req_ack2;
+logic                                               core_imem_req2;
+type_scr1_mem_cmd_e                                 core_imem_cmd2;
+logic [`SCR1_IMEM_AWIDTH-1:0]                       core_imem_addr2;
+logic [`SCR1_IMEM_DWIDTH-1:0]                       core_imem_rdata2;
+type_scr1_mem_resp_e                                core_imem_resp2;
+
+// Data memory interface from core to router
+logic                                               core_dmem_req_ack2;
+logic                                               core_dmem_req2;
+type_scr1_mem_cmd_e                                 core_dmem_cmd2;
+type_scr1_mem_width_e                               core_dmem_width2;
+logic [`SCR1_DMEM_AWIDTH-1:0]                       core_dmem_addr2;
+logic [`SCR1_DMEM_DWIDTH-1:0]                       core_dmem_wdata2;
+logic [`SCR1_DMEM_DWIDTH-1:0]                       core_dmem_rdata2;
+type_scr1_mem_resp_e                                core_dmem_resp2;
+
 // Instruction memory interface from router to AHB bridge
 logic                                               ahb_imem_req_ack;
 logic                                               ahb_imem_req;
@@ -219,6 +255,87 @@ scr1_reset_and2_cell i_tapc_rstn_and2_cell (
 //-------------------------------------------------------------------------------
 // SCR1 core instance
 //-------------------------------------------------------------------------------
+
+logic init_pc;
+logic [3:0] init_pc_v;
+
+always @(posedge clk or posedge rst_n_sync) begin
+	if(~rst_n_sync)
+		init_pc_v <='0;
+	else if(~&init_pc_v) init_pc_v <= {init_pc_v[2:0], 1'b1};
+end
+
+assign init_pc = ~init_pc_v[3] & init_pc_v[2];
+
+logic force_req;
+logic [`SCR1_IMEM_AWIDTH-1:0] force_pc;
+
+logic core_imem_req_ff;
+logic core_dmem_req_ff;
+logic force_end;
+
+always_ff @(posedge clk) begin
+	core_imem_req_ff <= core_imem_req1;
+	core_dmem_req_ff <= core_dmem_req1;
+end
+
+always_comb begin
+
+	core_imem_rdata1 = core_imem_rdata;
+	core_imem_rdata2 = core_imem_rdata;
+	
+	core_dmem_rdata1 = core_dmem_rdata;
+	core_dmem_rdata2 = core_dmem_rdata;
+
+	if(core_imem_req1) begin
+		core_imem_req_ack1 = core_imem_req_ack;
+		core_imem_req_ack2 = 0;
+		core_imem_req = core_imem_req1;
+		core_imem_cmd = core_imem_cmd1;
+		core_imem_addr = core_imem_addr1;
+	end else begin
+		core_imem_req_ack2 = core_imem_req_ack;
+		core_imem_req_ack1 = 0;
+		core_imem_req = core_imem_req2;
+		core_imem_cmd = core_imem_cmd2;
+		core_imem_addr = core_imem_addr2;	
+	end
+	
+	if(core_dmem_req1) begin
+		core_dmem_req_ack1 = core_dmem_req_ack;
+		core_dmem_req_ack2 = 0;
+		core_dmem_req = core_dmem_req1;
+		core_dmem_cmd = core_dmem_cmd1;
+		core_dmem_width = core_dmem_width1;
+		core_dmem_addr = core_dmem_addr1;
+		core_dmem_wdata = core_dmem_wdata1;
+	end else begin	
+		core_dmem_req_ack2 = core_dmem_req_ack;
+		core_dmem_req_ack1 = 0;
+		core_dmem_req = core_dmem_req2;
+		core_dmem_cmd = core_dmem_cmd2;
+		core_dmem_width = core_dmem_width2;
+		core_dmem_addr = core_dmem_addr2;
+		core_dmem_wdata = core_dmem_wdata2;
+	end
+	
+	if(core_imem_req_ff) begin
+		core_imem_resp1 = core_imem_resp;
+		core_imem_resp2 = SCR1_MEM_RESP_NOTRDY;
+	end else begin
+		core_imem_resp2 = core_imem_resp;
+		core_imem_resp1 = SCR1_MEM_RESP_NOTRDY;
+	end
+	
+	if(core_dmem_req_ff) begin
+		core_dmem_resp1 = core_dmem_resp;
+		core_dmem_resp2 = SCR1_MEM_RESP_NOTRDY;
+	end else begin
+		core_dmem_resp2 = core_dmem_resp;
+		core_dmem_resp1 = SCR1_MEM_RESP_NOTRDY;
+	end
+end
+
 scr1_core_top i_core_top (
     // Common
     .pwrup_rst_n                (pwrup_rst_n_sync ),
@@ -227,6 +344,10 @@ scr1_core_top i_core_top (
     .test_mode                  (test_mode        ),
     .test_rst_n                 (test_rst_n       ),
     .clk                        (clk              ),
+    .init_pc			(init_pc	  ),
+    .force_o			(force_req  	  ),
+    .force_pc_o			(force_pc	  ),
+    .force_end_i		(force_end	  ),
     .core_rst_n_o               (core_rst_n_local ),
     .core_rdc_qlfy_o            (                 ),
 `ifdef SCR1_DBG_EN
@@ -263,22 +384,70 @@ scr1_core_top i_core_top (
 `endif // SCR1_DBG_EN
 
     // Instruction memory interface
-    .imem2core_req_ack_i        (core_imem_req_ack),
-    .core2imem_req_o            (core_imem_req    ),
-    .core2imem_cmd_o            (core_imem_cmd    ),
-    .core2imem_addr_o           (core_imem_addr   ),
-    .imem2core_rdata_i          (core_imem_rdata  ),
-    .imem2core_resp_i           (core_imem_resp   ),
+    .imem2core_req_ack_i        (core_imem_req_ack1),
+    .core2imem_req_o            (core_imem_req1    ),
+    .core2imem_cmd_o            (core_imem_cmd1    ),
+    .core2imem_addr_o           (core_imem_addr1   ),
+    .imem2core_rdata_i          (core_imem_rdata1  ),
+    .imem2core_resp_i           (core_imem_resp1   ),
 
     // Data memory interface
-    .dmem2core_req_ack_i        (core_dmem_req_ack),
-    .core2dmem_req_o            (core_dmem_req    ),
-    .core2dmem_cmd_o            (core_dmem_cmd    ),
-    .core2dmem_width_o          (core_dmem_width  ),
-    .core2dmem_addr_o           (core_dmem_addr   ),
-    .core2dmem_wdata_o          (core_dmem_wdata  ),
-    .dmem2core_rdata_i          (core_dmem_rdata  ),
-    .dmem2core_resp_i           (core_dmem_resp   )
+    .dmem2core_req_ack_i        (core_dmem_req_ack1),
+    .core2dmem_req_o            (core_dmem_req1    ),
+    .core2dmem_cmd_o            (core_dmem_cmd1    ),
+    .core2dmem_width_o          (core_dmem_width1  ),
+    .core2dmem_addr_o           (core_dmem_addr1   ),
+    .core2dmem_wdata_o          (core_dmem_wdata1  ),
+    .dmem2core_rdata_i          (core_dmem_rdata1  ),
+    .dmem2core_resp_i           (core_dmem_resp1   )
+);
+
+scr1_core_top i_core_top_2 (
+    // Common
+    .pwrup_rst_n                (pwrup_rst_n_sync ),
+    .rst_n                      (rst_n_sync       ),
+    .cpu_rst_n                  (cpu_rst_n_sync   ),
+    .test_mode                  (test_mode        ),
+    .test_rst_n                 (test_rst_n       ),
+    .clk                        (clk              ),
+    .force_i			(force_req  	  ),
+    .force_pc_i			(force_pc	  ),
+    .force_end_o		(force_end	  ),
+    // Fuses
+    .core_fuse_mhartid_i        (fuse_mhartid+1   ),
+`ifdef SCR1_DBG_EN
+    .tapc_fuse_idcode_i         (fuse_idcode      ),
+`endif // SCR1_DBG_EN
+
+    // IRQ
+`ifdef SCR1_IPIC_EN
+    .core_irq_lines_i           (irq_lines        ),
+`else // SCR1_IPIC_EN
+    .core_irq_ext_i             (ext_irq          ),
+`endif // SCR1_IPIC_EN
+    .core_irq_soft_i            (soft_irq         ),
+    .core_irq_mtimer_i          (timer_irq        ),
+
+    // Memory-mapped external timer
+    .core_mtimer_val_i          (timer_val        ),
+
+    // Instruction memory interface
+    .imem2core_req_ack_i        (core_imem_req_ack2),
+    .core2imem_req_o            (core_imem_req2    ),
+    .core2imem_cmd_o            (core_imem_cmd2    ),
+    .core2imem_addr_o           (core_imem_addr2   ),
+    .imem2core_rdata_i          (core_imem_rdata2  ),
+    .imem2core_resp_i           (core_imem_resp2   ),
+
+    // Data memory interface
+    .dmem2core_req_ack_i        (core_dmem_req_ack2),
+    .core2dmem_req_o            (core_dmem_req2    ),
+    .core2dmem_cmd_o            (core_dmem_cmd2    ),
+    .core2dmem_width_o          (core_dmem_width2  ),
+    .core2dmem_addr_o           (core_dmem_addr2   ),
+    .core2dmem_wdata_o          (core_dmem_wdata2  ),
+    .dmem2core_rdata_i          (core_dmem_rdata2  ),
+    .dmem2core_resp_i           (core_dmem_resp2   )
 );
 
 

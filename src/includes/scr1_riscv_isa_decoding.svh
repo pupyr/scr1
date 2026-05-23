@@ -33,7 +33,8 @@ typedef enum logic [6:2] {
     SCR1_OPCODE_BRANCH      = 5'b11000,
     SCR1_OPCODE_JALR        = 5'b11001,
     SCR1_OPCODE_JAL         = 5'b11011,
-    SCR1_OPCODE_SYSTEM      = 5'b11100
+    SCR1_OPCODE_SYSTEM      = 5'b11100,
+    SCR1_OPCODE_HW_PARAL    = 5'b11111
 } type_scr1_rvi_opcode_e;
 
 
@@ -158,6 +159,14 @@ typedef enum logic [SCR1_RD_WB_WIDTH_E-1:0] {
 //-------------------------------------------------------------------------------
 localparam SCR1_GPR_FIELD_WIDTH = 5;
 
+`define PTU_OP_WIDTH 2
+
+typedef enum logic [`PTU_OP_WIDTH-1:0] {
+    SCR1_PTU_STRT = 2'b00,
+    SCR1_PTU_WAIT = 2'b01,
+    SCR1_PTU_END  = 2'b10
+} type_scr1_ptu_op_e;
+
 typedef struct packed {
     logic                               instr_rvc;      // used with a different meaning for IFU access fault exception
     type_scr1_ialu_op_sel_e             ialu_op;
@@ -177,6 +186,8 @@ typedef struct packed {
     logic [SCR1_GPR_FIELD_WIDTH-1:0]    rd_addr;
     logic [`SCR1_XLEN-1:0]              imm;            // used as {funct3, CSR address} for CSR instructions
                                                         // used as instruction field for illegal instruction exception
+    logic				ptu;
+    logic [`PTU_OP_WIDTH-1:0]		ptu_op;
     logic                               exc_req;
     type_scr1_exc_code_e                exc_code;
 } type_scr1_exu_cmd_s;
