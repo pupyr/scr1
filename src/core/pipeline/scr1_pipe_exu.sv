@@ -765,7 +765,7 @@ always_comb begin
     endcase
 end
 
-assign exu2ifu_pc_new_req_o = ~ptu_end_late_ff &
+assign exu2ifu_pc_new_req_o = ~(ptu_end_late_ff & ~force_i) &
 			    ( init_pc                                        // reset
 			    | force_i  | ptu_end_ff & ptu_active2_ff
                             | exu2csr_take_irq_o
